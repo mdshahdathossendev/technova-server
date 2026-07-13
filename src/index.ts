@@ -19,7 +19,7 @@ const client = new MongoClient(uri, {
 });
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db("technova");
     const productCollection = db.collection("allProdect");
     app.get("/", (req, res) => {
@@ -53,12 +53,12 @@ app.delete("/product/:id", async (req, res) => {
 
   res.send(result);
 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+   
   } finally {
     
   }
 }
-run()
+// run()
 
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
