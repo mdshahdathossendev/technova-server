@@ -58,7 +58,7 @@ app.delete("/product/:id", async (req, res) => {
     
   }
 }
-// run()
+run()
 
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
