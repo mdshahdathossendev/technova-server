@@ -7,8 +7,6 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5000;
 const uri = process.env.MONGODB_URI as string;
-const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
-const telegramGroupChatId = process.env.TELEGRAM_GROUP_CHAT_ID;
 app.use(cors());
 app.use(express.json());
 
@@ -20,44 +18,23 @@ const client = new MongoClient(uri, {
   }
 });
 
-function escapeTelegramHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
+const sendDiscordMessage = async (message: string) => {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
 
-async function sendOrderNotification(order: unknown, orderId: unknown) {
-  if (!telegramBotToken || !telegramGroupChatId) {
-    console.warn("Telegram notification skipped: Telegram environment variables are not configured.");
-    return;
+  if (!webhookUrl) {
+    throw new Error("DISCORD_WEBHOOK_URL is not configured");
   }
 
-  const orderDetails = JSON.stringify(order, null, 2);
-  const message = [
-    "<b>নতুন অর্ডার কনফার্ম হয়েছে</b>",
-    `<b>Order ID:</b> <code>${escapeTelegramHtml(String(orderId))}</code>`,
-    `<pre>${escapeTelegramHtml(orderDetails).slice(0, 3800)}</pre>`,
-  ].join("\n");
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content: message }),
+  });
 
-  try {
-    const response = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: telegramGroupChatId,
-        text: message,
-        parse_mode: "HTML",
-      }),
-    });
-
-    if (!response.ok) {
-      console.error("Telegram notification failed:", await response.text());
-    }
-  } catch (error) {
-    console.error("Telegram notification error:", error);
+  if (!response.ok) {
+    throw new Error(`Discord webhook failed with status ${response.status}`);
   }
-}
+};
 
 async function run() {
   try {
@@ -68,10 +45,38 @@ async function run() {
     app.get("/", (req, res) => {
       res.send("TechNova Server is Running 🚀");
     });
+    app.post("/sendDiscordMessage", async (req, res) => {
+      const { message } = req.body;
+
+      if (typeof message !== "string" || !message.trim()) {
+        res.status(400).json({ error: "message is required" });
+        return;
+      }
+
+      try {
+        await sendDiscordMessage(message);
+        res.status(204).send();
+      } catch (error) {
+        console.error("Discord message error:", error);
+        res.status(502).json({ error: "Failed to send Discord message" });
+      }
+    });
     app.post('/order', async (req, res)=>{
       const order = req.body;
       const result = await orderPordect.insertOne(order);
-      await sendOrderNotification(order, result.insertedId);
+
+      const orderMessage = [
+        "New order received",
+        `Order ID: ${result.insertedId}`,
+        JSON.stringify(order, null, 2),
+      ].join("\n").slice(0, 2000);
+
+      try {
+        await sendDiscordMessage(orderMessage);
+      } catch (error) {
+        console.error("Order Discord notification error:", error);
+      }
+
       res.status(201).send(result);
     });
     app.get('/order', async (req, res) => {
