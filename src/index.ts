@@ -64,12 +64,25 @@ async function run() {
     app.post('/order', async (req, res)=>{
       const order = req.body;
       const result = await orderPordect.insertOne(order);
+      const customerName =
+        order.customerName ||
+        order.customer?.name ||
+        order.name ||
+        "Unknown customer";
+      const confirmationLink =
+        order.confirmationLink ||
+        order.confirmationUrl ||
+        order.orderLink ||
+        `${process.env.FRONTEND_URL || "http://localhost:3000"}/order/${result.insertedId}`;
 
       const orderMessage = [
         "New order received",
         `Order ID: ${result.insertedId}`,
-        JSON.stringify(order, null, 2),
-      ].join("\n").slice(0, 2000);
+        `Customer: ${customerName}`,
+        `Order confirmation: ${confirmationLink}`,
+        "Order data:",
+        JSON.stringify(order, null, 2).slice(0, 1400),
+      ].join("\n");
 
       try {
         await sendDiscordMessage(orderMessage);
